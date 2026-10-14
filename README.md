@@ -78,6 +78,8 @@
 
 　操作はパソコンのキーボードか、又は表示メニューから仮想フルキーボードを表示させて操作することも出来ます。
 
+![Keyboard](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/KeyBoard.png)
+
 　メインパネル、カラーTVディスプレイ、仮想フルキーボード、RAMモニタのいずれかがアクティブなときにはWindowsキーボードから操作が出来ます。
 
 　Windowsキーボードにはないキーの割り当ては次の通りです。
