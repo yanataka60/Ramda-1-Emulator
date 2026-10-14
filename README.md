@@ -30,6 +30,9 @@
 
 ### ファイル入出力
 　バイナリファイルの読込、保存の方法は二通りの方法があります。
+
+![Memory INOUT](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/Memory%20INOUT.png)
+
 #### RAMバイナリ入出力
 　単純なバイナリファイルを直接RAMにロード、RAMからセーブします。
 ##### バイナリファイルをRAMへLOAD
@@ -42,24 +45,34 @@
 
 　ファイルはWAVファイルとなります。
 
+![CMT](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/CMT.png)
+
 ### 64KRAMモニタ
 　RAMの内容が確認できます。表示のみで書き換えることはできません。
+
+![Memory Disp](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/Memory%20Disp.png)
 
 ### プリンタ
 　拡張PIA#2へのプリンタ出力がそのまま表示されます。
 
 　出力ファイルを指定して「受信データをテキストファイルに書き出す」をチェックすればテキストファイルとして保存も出来ます。
 
-### 電子オルガン
-　このパネルを表示しなくても電子オルガンは接続済みです。
+![Printer](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/Printer.png)
 
-　このパネルは、手動でオルガンから音を出すためのものです。
+### 電子オルガン
+　このパネルを表示しなくても電子オルガンは接続済みです。手動でオルガンから音を出すためのものです。
+
+![Organ](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/Organ.png)
 
 ## ソフトウェア
 ### CHICK-BUG
 　Ramda1Emulator.exeと同じフォルダにCHICK-BUG.binがある状態で起動するとアドレスがFE78にセットされ、カラーTVディスプレイのウィンドウが表示されます。
 
+![CHICK-BUG1](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/CHICK-BUG1.png)
+
 　この状態でGO-SWを操作するとCHICK-BUGが起動し、ATNキーを押すことでコマンド待ちになります。
+
+![CHICK-BUG1](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/CHICK-BUG2.png)
 
 　操作はパソコンのキーボードか、又は表示メニューから仮想フルキーボードを表示させて操作することも出来ます。
 
@@ -81,9 +94,17 @@
 
 　CHICK-BUGが起動したらGコマンドでA000hにジャンプするとメニューが表示されるので5を選択するとAssemblerが起動します。
 
+![Assembler1](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/Assembler1.png)
+
+![Assembler2](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/Assembler2.png)
+
+![Assembler3](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/Assembler3.png)
+
 ### 電大版Tiny-Basic
 　電大版Tiny-Basicの起動には巻末付録のユーティリティプログラムが必要です。
 
 　Ramda1Emulator.exeと同じフォルダにTinyBasic.binを置いてRamda1Emulatorを起動させると自動的に読み込みます。
 
 　CHICK-BUGが起動したらGコマンドでA000hにジャンプするとメニューが表示されるので6を選択すると電大版Tiny-Basicが起動します。
+
+![Tint-Basic](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/Tiny-Basic.png)
