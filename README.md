@@ -10,6 +10,8 @@
 　また、「マイコン手づくり塾」で紹介されているCHICK-BUG、UTILITIES、電大版Tiny-Basic、Assemblerなどのバイナリファイルを用意できればすべて動きます。
 
 ## 使い方
+　適当なフォルダにRamda1Emulator.exeを置き、ダブルクリック等で起動させます。
+
 　起動した状態でメインパネルが操作可能です。
 
 ![Ramda-1](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/MAIN%20PANEL.png)
