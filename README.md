@@ -72,7 +72,9 @@
 
 　この状態でGO-SWを操作するとCHICK-BUGが起動し、ATNキーを押すことでコマンド待ちになります。
 
-![CHICK-BUG1](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/CHICK-BUG2.png)
+![CHICK-BUG2](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/CHICK-BUG2.png)
+
+![CHICK-BUG3](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/CHICK-BUG3.png)
 
 　操作はパソコンのキーボードか、又は表示メニューから仮想フルキーボードを表示させて操作することも出来ます。
 
