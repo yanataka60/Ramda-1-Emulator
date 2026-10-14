@@ -1,6 +1,6 @@
 ﻿unit CassetteForm;
 interface
-uses Winapi.Windows,System.SysUtils,System.Classes,System.UITypes,Vcl.Forms,Vcl.Controls,
+uses EmulatorSettings,Winapi.Windows,System.SysUtils,System.Classes,System.UITypes,Vcl.Forms,Vcl.Controls,
  Vcl.StdCtrls,Vcl.ExtCtrls,Vcl.Dialogs,CassetteSignal;
 type
  TFrmCassette=class(TForm)
@@ -58,16 +58,33 @@ begin inherited;Params.ExStyle:=(Params.ExStyle or WS_EX_APPWINDOW)and not WS_EX
 constructor TFrmCassette.CreateForTape(AOwner:TComponent;ATape:TCassetteSignal);
 begin
  inherited Create(AOwner);FTape:=ATape;
+ FUpdating:=True;
+ try
+  FInput.Text:=Ramda1Settings.CassetteInputFile;
+  FOutput.Text:=Ramda1Settings.CassetteOutputFile;
+  InputDialog.InitialDir:=Ramda1Settings.CassetteInputDirectory;
+  InputDialog.FileName:=Ramda1Settings.CassetteInputFile;
+  OutputDialog.InitialDir:=Ramda1Settings.CassetteOutputDirectory;
+  OutputDialog.FileName:=Ramda1Settings.CassetteOutputFile;
+  InputDialog.Options:=InputDialog.Options+[ofNoChangeDir];
+  OutputDialog.Options:=OutputDialog.Options+[ofNoChangeDir];
+ finally FUpdating:=False end;
  StatusTick(Self);StatusTimer.Enabled:=True;
 end;
 procedure TFrmCassette.InputChanged(Sender:TObject);
 begin
  if (FTape=nil) or FUpdating then Exit;
+ Ramda1Settings.RememberFile(Ramda1Settings.CassetteInputFile,Ramda1Settings.CassetteInputDirectory,FInput.Text);
  FTape.StopPlayback;FLoadedInput:='';FLastResult:='再生ファイルを入力後、Enterで確定してください';
  StatusTick(Self);
 end;
 procedure TFrmCassette.OutputChanged(Sender:TObject);
-begin if (FTape<>nil) and not FUpdating then StatusTick(Self)end;
+begin
+ if (FTape<>nil) and not FUpdating then begin
+  Ramda1Settings.RememberFile(Ramda1Settings.CassetteOutputFile,Ramda1Settings.CassetteOutputDirectory,FOutput.Text);
+  StatusTick(Self);
+ end;
+end;
 function TFrmCassette.PreparePlayback:Boolean;
 var Name:string;
 begin
@@ -75,13 +92,14 @@ begin
  if FTape.Recording then Exit;
  Name:=Trim(FInput.Text);if Name=''then Exit;
  try
-  Name:=ExpandFileName(Name);
+  Name:=Ramda1Settings.ResolveFileName(Name,Ramda1Settings.CassetteInputDirectory);
   if Name<>FLoadedInput then begin
    FTape.LoadWav(Name);FLoadedInput:=Name;
    FUpdating:=True;
    try FInput.Text:=Name finally FUpdating:=False end;
    FTape.Play;
   end;
+  Ramda1Settings.RememberFile(Ramda1Settings.CassetteInputFile,Ramda1Settings.CassetteInputDirectory,Name);
   FLastResult:='';Result:=True;
  except on E:Exception do begin
   FLoadedInput:='';FLastResult:='再生ファイルを読み込めません';ShowMessage(E.Message);
@@ -97,7 +115,10 @@ begin if Key=#13 then begin Key:=#0;PreparePlayback end end;
 procedure TFrmCassette.OpenClick(Sender:TObject);
 begin
  if FTape.Recording then Exit;
+ InputDialog.InitialDir:=Ramda1Settings.CassetteInputDirectory;
+ InputDialog.FileName:=Ramda1Settings.CassetteInputFile;
  if InputDialog.Execute then begin
+   Ramda1Settings.RememberFile(Ramda1Settings.CassetteInputFile,Ramda1Settings.CassetteInputDirectory,InputDialog.FileName);
    FUpdating:=True;
    try FInput.Text:=InputDialog.FileName finally FUpdating:=False end;
    FLoadedInput:='';PreparePlayback;
@@ -106,6 +127,8 @@ end;
 procedure TFrmCassette.BrowseOutputClick(Sender:TObject);
 begin
  if FTape.Recording then Exit;
+ OutputDialog.InitialDir:=Ramda1Settings.CassetteOutputDirectory;
+ OutputDialog.FileName:=Ramda1Settings.CassetteOutputFile;
  if OutputDialog.Execute then FOutput.Text:=OutputDialog.FileName;
  StatusTick(Self);
 end;
@@ -128,7 +151,7 @@ begin
  Name:=Trim(FOutput.Text);if Name=''then Exit;
  try
   if ExtractFileExt(Name)=''then Name:=Name+'.wav';
-  Name:=ExpandFileName(Name);
+  Name:=Ramda1Settings.ResolveFileName(Name,Ramda1Settings.CassetteOutputDirectory);
   if not DirectoryExists(ExtractFilePath(Name))then
    raise Exception.Create('出力フォルダが存在しません');
   if FileExists(Name)then

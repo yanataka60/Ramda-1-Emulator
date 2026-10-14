@@ -70,6 +70,9 @@ begin
  FAssemblerLoaded:=LoadFile(Directory,'Assembler.bin',Memory,$B000,$1000);
  FTinyBasicLoaded:=LoadFile(Directory,'TinyBasic.bin',Memory,$A700,$0900);
  ConnectTinyBasic(Memory);
+ { Optional native F-BASIC image; all runtime support is inside the BIN.
+   Keep 8000-9FFF as ordinary RAM, as in the original v1.45. }
+ LoadFile(Directory,'CassetteFloatBasic.bin',Memory,$8000,$2000);
 end;
 function TExternalROM.IsReadOnly(Address:Word):Boolean;
 begin

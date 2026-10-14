@@ -1,5 +1,5 @@
 object FrmCassette: TFrmCassette
-  Caption = #923'-1 '#12459#12475#12483#12488' / WAV'
+  Caption = 'Ramda1 '#12459#12475#12483#12488' / WAV'
   ClientWidth = 640
   ClientHeight = 370
   Color = clBtnFace

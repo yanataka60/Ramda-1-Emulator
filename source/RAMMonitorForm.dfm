@@ -1,5 +1,5 @@
 object FrmRAMMonitor: TFrmRAMMonitor
-  Caption = #923'-1 RAM'#12514#12491#12479' - 64KB ($0000-$FFFF)'
+  Caption = 'Ramda1 RAM'#12514#12491#12479' - 64KB ($0000-$FFFF)'
   ClientWidth = 650
   ClientHeight = 680
   Color = clBtnFace

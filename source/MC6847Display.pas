@@ -18,7 +18,7 @@ function MC6847CellPixel(Data: Byte; X, Y: Integer; CSS: Boolean): Byte;
 function MC6847TextOffset(X, Y: Integer): Integer;
 
 { Control byte: bit0=A/G, bit1=GM0, bit3=CSS; GM1/GM2 stay LOW. }
-function Lambda1TVControl(PortBPins: Byte): Byte;
+function Ramda1TVControl(PortBPins: Byte): Byte;
 function MC6847BorderColour(Control: Byte): Byte;
 function MC6847GraphicsOffset(HiRes: Boolean; X, Y: Integer): Integer;
 function MC6847GraphicsPixel(Data: Byte; X: Integer; CSS, HiRes: Boolean): Byte;
@@ -121,7 +121,7 @@ begin
     Exit;
   end;
   { Six-bit internal character ROM; DD6 does not select an inverse character
-    because INV is tied LOW in the Lambda-1 circuit. }
+    because INV is tied LOW in the Ramda1 circuit. }
   Code := Data and $3F;
   if Code < $20 then Inc(Code, $40);
   { 8x12 cell: 2 columns left, 3 lines above the 5x7 matrix.
@@ -133,7 +133,7 @@ begin
   end;
 end;
 
-function Lambda1TVControl(PortBPins: Byte): Byte;
+function Ramda1TVControl(PortBPins: Byte): Byte;
 begin
   { Board inverters: PB3 -> A/G, PB2 -> GM0, PB4 -> CSS.
     Use physical output pins (including DDR/pull-ups), never raw ORB. }

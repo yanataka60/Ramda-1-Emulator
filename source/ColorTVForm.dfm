@@ -1,5 +1,5 @@
 object FrmColorTV: TFrmColorTV
-  Caption = #923'-1 '#12459#12521#12540'TV'#12487#12451#12473#12503#12524#12452
+  Caption = 'Ramda1 '#12459#12521#12540'TV'#12487#12451#12473#12503#12524#12452
   ClientWidth = 620
   ClientHeight = 500
   Color = 2106147

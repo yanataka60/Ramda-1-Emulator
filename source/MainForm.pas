@@ -2,7 +2,7 @@
 interface
 uses Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, System.Types, System.UITypes,
  Vcl.AppEvnts, Vcl.Forms, Vcl.Graphics, Vcl.Controls, Vcl.ExtCtrls, Vcl.Dialogs, Vcl.Menus,
- ExternalROM, PrinterDevice, PrinterForm, PeripheralRoute, OrganSynth, OrganAudio, OrganForm, MC6800, MC6821PortA, MC6821PortB, MC6847Sync, MC6847Display, CassetteSignal, CassetteForm, RAMFileForm, RAMMonitorForm, ColorTVForm, KeyboardForm;
+ EmulatorSettings, ExternalROM, PrinterDevice, PrinterForm, PeripheralRoute, OrganSynth, OrganAudio, OrganForm, MC6800, MC6821PortA, MC6821PortB, MC6847Sync, MC6847Display, CassetteSignal, CassetteForm, RAMFileForm, RAMMonitorForm, ColorTVForm, KeyboardForm;
 const
  WM_SHOW_STARTUP_TV = WM_APP + $101;
 type
@@ -13,6 +13,8 @@ type
     RunMenu: TMenuItem;
     ResetItem: TMenuItem;
     ViewMenu: TMenuItem;
+    PanelRedrawItem: TMenuItem;
+    PanelAutoStopItem: TMenuItem;
     RAMMonitorItem: TMenuItem;
     TVItem: TMenuItem;
     KeyboardItem: TMenuItem;
@@ -23,6 +25,8 @@ type
     Timer: TTimer;
     FAppEvents: TApplicationEvents;
     MainMenu: TMainMenu;
+    procedure PanelRedrawMenuClick(Sender:TObject);
+    procedure PanelAutoStopMenuClick(Sender:TObject);
     procedure PrinterMenuClick(Sender:TObject);
     procedure OrganMenuClick(Sender:TObject);
     procedure Tick(Sender:TObject);
@@ -40,6 +44,9 @@ type
     procedure CassetteMenuClick(Sender:TObject);
 
  private
+  FPanelRedrawEnabled,FPanelRefreshOnce,FAutoPanelStop:Boolean;
+  FPanelSnapshot:TBitmap;
+  FPanelSnapshotValid:Boolean;
   FStartupTVPending:Boolean;
   FVramBase:Word;
   FExternalROM:TExternalROM;
@@ -60,12 +67,17 @@ type
   procedure DrawToggle(C:TCanvas;R:TRect;OnState:Boolean;Blue:Boolean;const Caption:string; Momentary:Boolean=False);
   procedure DrawMetalToggle(C:TCanvas;R:TRect;OnState:Boolean;const Caption:string; Momentary:Boolean=False);
   procedure Draw7Seg(C:TCanvas;X,Y:Integer;V:Integer);
+  procedure DrawPanelLogo(C:TCanvas;X,Y:Integer);
+  procedure RefreshPanelOnce;
+  procedure SetPanelRedrawEnabled(Enabled:Boolean);
+  procedure CheckMonitorPanelRedraw;
   procedure UpdateFromSwitches; procedure DMARead; procedure DMAWrite; procedure DoReset;
 
   procedure KeyboardInput(Code:Byte);
 
   procedure RaiseRelatedWindows;
   procedure PlaceBesideMain(F:TForm;RightSide:Boolean);
+  procedure EnsurePanelOnScreen(F:TForm);
   procedure PIAIRQAChanged(HighLevel:Boolean);
   procedure AttentionLevel(HighLevel:Boolean);
   procedure UpdateVideoPins;
@@ -85,7 +97,7 @@ procedure TFrmMain.CreateParams(var Params: TCreateParams);
 begin
  inherited CreateParams(Params);
  { Main window: force a normal top-level application window so Windows gives
-   Lambda-1 its own taskbar button. }
+   Ramda1 its own taskbar button. }
  Params.ExStyle := (Params.ExStyle or WS_EX_APPWINDOW) and not WS_EX_TOOLWINDOW;
  Params.WndParent := 0;
 end;
@@ -94,6 +106,11 @@ var Counter,Frequency:Int64;
 begin
  inherited Create(AOwner);
  Icon.Assign(Application.Icon);
+ FPanelSnapshot:=TBitmap.Create;
+ FPanelSnapshotValid:=False;
+ FPanelRedrawEnabled:=True;
+ FAutoPanelStop:=Ramda1Settings.AutoPanelStop;
+ PanelAutoStopItem.Checked:=FAutoPanelStop;
  FPrinter:=TPrinterDevice.Create;
  FPeripheralRoute:=TPeripheralRoute.Create;
  FOrganSynth:=TOrganSynth.Create; FOrganAudio:=nil; FOrgan:=nil;
@@ -136,7 +153,7 @@ begin
  if FOrganSynth.Connected then begin
   FTVControl:=0; FTape.SetMotor(False); FTape.SetOutput(True); Exit;
  end;
- FTVControl:=Lambda1TVControl(Pins);
+ FTVControl:=Ramda1TVControl(Pins);
  FTape.SetOutput((Pins and $01)<>0);
  FTape.SetMotor((Pins and $02)=0);
 end;
@@ -147,7 +164,7 @@ begin
   FPrinterForm:=TFrmPrinter.CreateForPrinter(Self,FPrinter);
   PlaceBesideMain(FPrinterForm,False);
  end;
- FPrinterForm.Show;FPrinterForm.BringToFront;
+ EnsurePanelOnScreen(FPrinterForm); FPrinterForm.Show;FPrinterForm.BringToFront;
 end;
 procedure TFrmMain.OrganMenuClick(Sender:TObject);
 begin
@@ -160,7 +177,7 @@ begin
  end;
  UpdatePortBOutputs;
  FOrgan.SetAudioStatus(FOrganAudio.Active,FOrganAudio.LastResult);
- FOrgan.Show;FOrgan.BringToFront;
+ EnsurePanelOnScreen(FOrgan); FOrgan.Show;FOrgan.BringToFront;
 end;
 
 procedure TFrmMain.CassetteMenuClick(Sender:TObject);
@@ -168,7 +185,7 @@ begin
  if not Assigned(FCassette)then begin
   FCassette:=TFrmCassette.CreateForTape(Self,FTape); PlaceBesideMain(FCassette,False);
  end;
- FCassette.Show;FCassette.BringToFront;
+ EnsurePanelOnScreen(FCassette); FCassette.Show;FCassette.BringToFront;
 end;
 
 function TFrmMain.LoadStartupMonitor:Boolean;
@@ -192,9 +209,14 @@ end;
 
 destructor TFrmMain.Destroy;
 begin
+  Timer.Enabled:=False;
+  Ramda1Settings.AutoPanelStop:=FAutoPanelStop;
+  try Ramda1Settings.Save
+  except on E:Exception do MessageDlg('設定を保存できません: '+E.Message,mtError,[mbOK],0)end;
   { Auxiliary windows are owned by the main form.  Free them while the
     owner and RAM pointers are still valid, and clear the references to
     prevent a second destruction during application shutdown. }
+  FreeAndNil(FPanelSnapshot);
   FreeAndNil(FAppEvents);
   FreeAndNil(FExternalROM);
   FreeAndNil(FPrinterForm);
@@ -259,10 +281,42 @@ begin
  end;
 end;
 
+procedure TFrmMain.RefreshPanelOnce;
+begin
+ FPanelRefreshOnce:=True;
+ Panel.Invalidate;
+end;
+procedure TFrmMain.PanelAutoStopMenuClick(Sender:TObject);
+begin
+ FAutoPanelStop:=not FAutoPanelStop;
+ PanelAutoStopItem.Checked:=FAutoPanelStop;
+ if not FAutoPanelStop then SetPanelRedrawEnabled(True);
+end;
+procedure TFrmMain.SetPanelRedrawEnabled(Enabled:Boolean);
+begin
+ FPanelRedrawEnabled:=Enabled;
+ PanelRedrawItem.Checked:=Enabled;
+ RefreshPanelOnce;
+end;
+procedure TFrmMain.PanelRedrawMenuClick(Sender:TObject);
+begin
+ SetPanelRedrawEnabled(not FPanelRedrawEnabled);
+end;
+procedure TFrmMain.CheckMonitorPanelRedraw;
+begin
+ { Detect actual CHICK-BUG cold/warm entry, not its display subroutines.
+   RESET only restores redraw; it is stopped when monitor execution starts. }
+ if FAutoPanelStop and FPanelRedrawEnabled and(FVramBase=$F000)and
+    ((FCPU.PC=$FE78)or(FCPU.PC=$FE88))and
+    (FMem[FCPU.PC]=$8E)and(FMem[FCPU.PC+1]=$F7)and(FMem[FCPU.PC+2]=$FF)then
+  SetPanelRedrawEnabled(False);
+end;
+
 procedure TFrmMain.DoReset;
 begin
  { Emulator-only RESET.  Keep RAM/VRAM intact, as a hardware CPU reset does not
    erase memory.  The MC6800 core fetches the reset vector from FFFE/FFFF. }
+ SetPanelRedrawEnabled(True);
  FPrinter.Reset;
  FPIAB.Reset; UpdatePortBOutputs; FCPUBudget:=0;
  FPIAA.Reset; { video oscillator and external keyboard pins keep their state }
@@ -273,14 +327,14 @@ begin
  FAddr:=FCPU.PC;
  FData:=FMem[FAddr];
  if Assigned(FTV) then FTV.Invalidate;
- Panel.Invalidate;
+ RefreshPanelOnce;
 end;
 procedure TFrmMain.UpdateFromSwitches; var i:Integer; begin FData:=0;for i:=0 to 7 do if FDataSw[i] then FData:=FData or (1 shl i);end;
 procedure TFrmMain.DMARead;
 begin
  FAddr:=Word((Cardinal(FAddr)+1)and $FFFF);
  FData:=FMem[FAddr];
- Panel.Invalidate;
+ RefreshPanelOnce;
 end;
 procedure TFrmMain.DMAWrite;
 begin
@@ -288,7 +342,7 @@ begin
  if not FExternalROM.IsReadOnly(FAddr)then FMem[FAddr]:=FData;
  FAddr:=Word((Cardinal(FAddr)+1)and $FFFF);
  FData:=FMem[FAddr];
- Panel.Invalidate;
+ RefreshPanelOnce;
 end;
 procedure TFrmMain.Tick(Sender:TObject); var Cycles,Instructions:Integer; Counter:Int64; changed:Boolean; begin
  UpdateVideoPins;
@@ -302,6 +356,7 @@ procedure TFrmMain.Tick(Sender:TObject); var Cycles,Instructions:Integer; Counte
   FCPUBudget:=FCPUBudget+(Counter-FCPUCounter)*FTape.CPUHz/FCPUCounterFrequency;
   Instructions:=0;
   while (FCPUBudget>0)and(Instructions<20000) do begin
+   if(FCPU.PC=$FE78)or(FCPU.PC=$FE88)then CheckMonitorPanelRedraw;
    Cycles:=FCPU.Step; FCPUBudget:=FCPUBudget-Cycles; FTape.Advance(Cycles);FOrganSynth.Advance(Cycles);FPrinter.Advance(Cycles);Inc(Instructions);
   end;
   FAddr:=FCPU.PC;FData:=FMem[FAddr];changed:=True;
@@ -315,7 +370,7 @@ procedure TFrmMain.Tick(Sender:TObject); var Cycles,Instructions:Integer; Counte
  if Assigned(FOrganAudio) then FOrganAudio.Pump(FOrganSynth)
  else FOrganSynth.ClearPending;
  FCPUCounter:=Counter;
- if changed then Panel.Invalidate;
+ if changed and FPanelRedrawEnabled then RefreshPanelOnce;
 end;
 procedure TFrmMain.DrawToggle(C:TCanvas;R:TRect;OnState:Boolean;Blue:Boolean;const Caption:string; Momentary:Boolean=False);
 var body,side,light,tip:TColor; cx,cy:Integer;
@@ -404,8 +459,36 @@ end;
 procedure TFrmMain.Draw7Seg(C:TCanvas;X,Y,V:Integer);const seg:array[0..15]of Byte=($3F,$06,$5B,$4F,$66,$6D,$7D,$07,$7F,$6F,$77,$7C,$39,$5E,$79,$71);var s:Byte;
  procedure Bar(x1,y1,x2,y2:Integer;onx:Boolean);begin if onx then C.Brush.Color:=RGB(255,38,18) else C.Brush.Color:=RGB(54,5,3);C.Pen.Style:=psClear;C.FillRect(Rect(X+x1,Y+y1,X+x2,Y+y2));end;
 begin s:=seg[V and 15];Bar(4,0,21,4,(s and 1)<>0);Bar(21,4,25,20,(s and 2)<>0);Bar(21,24,25,40,(s and 4)<>0);Bar(4,40,21,44,(s and 8)<>0);Bar(0,24,4,40,(s and 16)<>0);Bar(0,4,4,20,(s and 32)<>0);Bar(4,20,21,24,(s and 64)<>0);C.Pen.Style:=psSolid;end;
+procedure TFrmMain.DrawPanelLogo(C:TCanvas;X,Y:Integer);
+var SavedPen:TPen; SavedBrush:TBrush;
+begin
+ SavedPen:=TPen.Create; SavedBrush:=TBrush.Create;
+ try
+  SavedPen.Assign(C.Pen); SavedBrush.Assign(C.Brush);
+  C.Pen.Style:=psClear;
+  C.Brush.Style:=bsSolid; C.Brush.Color:=RGB(206,190,146);
+  { Entire Lambda-1 mark is geometry: no font or Unicode glyph required. }
+  C.Polygon([Point(X,Y+66),Point(X+25,Y),Point(X+39,Y),
+             Point(X+64,Y+66),Point(X+50,Y+66),Point(X+32,Y+17),
+             Point(X+14,Y+66)]);
+  C.FillRect(Rect(X+76,Y+32,X+103,Y+42));
+  C.Polygon([Point(X+120,Y+13),Point(X+140,Y),Point(X+153,Y),
+             Point(X+153,Y+55),Point(X+169,Y+55),Point(X+169,Y+66),
+             Point(X+122,Y+66),Point(X+122,Y+55),Point(X+140,Y+55),
+             Point(X+140,Y+16),Point(X+120,Y+28)]);
+ finally
+  C.Pen.Assign(SavedPen); C.Brush.Assign(SavedBrush);
+  SavedBrush.Free; SavedPen.Free;
+ end;
+end;
 procedure TFrmMain.PaintPanel(Sender:TObject);var C:TCanvas;i,x:Integer;begin
- C:=Panel.Canvas;C.Brush.Color:=RGB(12,12,15);C.FillRect(Panel.ClientRect);
+ if not FPanelRedrawEnabled and not FPanelRefreshOnce and FPanelSnapshotValid and
+    (FPanelSnapshot.Width=Panel.Width)and(FPanelSnapshot.Height=Panel.Height)then begin
+  { Expose/reveal still paints the saved image, without rebuilding the panel. }
+  Panel.Canvas.Draw(0,0,FPanelSnapshot);Exit;
+ end;
+ FPanelSnapshot.SetSize(Panel.Width,Panel.Height);
+ C:=FPanelSnapshot.Canvas;C.Brush.Color:=RGB(12,12,15);C.FillRect(Panel.ClientRect);
  { blue-grey cabinet edge and black original-style face plate }
  C.Pen.Width:=5;C.Pen.Color:=RGB(62,92,105);C.Brush.Style:=bsClear;C.Rectangle(7,7,Panel.Width-7,Panel.Height-7);
  C.Pen.Width:=2;C.Pen.Color:=RGB(42,40,38);C.Rectangle(20,20,Panel.Width-20,Panel.Height-20);C.Brush.Style:=bsSolid;
@@ -414,8 +497,9 @@ procedure TFrmMain.PaintPanel(Sender:TObject);var C:TCanvas;i,x:Integer;begin
  { LED display - compact upper-left as on original }
  C.Brush.Color:=RGB(29,10,9);C.Pen.Color:=RGB(71,48,37);C.Rectangle(64,92,306,157);C.Brush.Color:=RGB(7,3,3);C.Rectangle(70,98,300,151);
  for i:=0 to 3 do Draw7Seg(C,79+i*33,108,(FAddr shr ((3-i)*4)) and $F);for i:=0 to 1 do Draw7Seg(C,224+i*33,108,(FData shr ((1-i)*4)) and $F);
- { Lambda-1 mark }
- C.Font.Name:='Arial';C.Font.Style:=[fsBold];C.Font.Size:=68;C.Font.Color:=RGB(206,190,146);C.Brush.Style:=bsClear;C.TextOut(374,46,'Λ-1');C.Font.Size:=8;C.Font.Style:=[];C.TextOut(391,135,'MICROCOMPUTER SYSTEM');
+ { Ramda1 mark }
+ DrawPanelLogo(C,382,64);
+ C.Font.Name:='Arial';C.Font.Color:=RGB(206,190,146);C.Brush.Style:=bsClear;C.Font.Size:=8;C.Font.Style:=[];C.TextOut(391,135,'MICROCOMPUTER SYSTEM');
  { right control bank: ADDRESS SET / HALT-RUN / GO-RESET }
  DrawMetalToggle(C,Rect(405,238,438,294),FAddressPulse>0,'ADDRESS',True);DrawMetalToggle(C,Rect(455,238,488,294),FHalt,'HALT');DrawMetalToggle(C,Rect(505,238,538,294),FRun,'GO');
  C.Font.Size:=6;C.Font.Color:=RGB(180,172,146);C.TextOut(410,296,'SET');C.TextOut(460,296,'RUN');C.TextOut(507,296,'RESET');
@@ -426,6 +510,9 @@ procedure TFrmMain.PaintPanel(Sender:TObject);var C:TCanvas;i,x:Integer;begin
  { only a discreet status line; keep face panel visually close to original }
  C.Font.Name:='Consolas';C.Font.Size:=8;C.Font.Style:=[];C.Font.Color:=RGB(93,91,80);C.Brush.Style:=bsClear;
  C.TextOut(64,615,Format('PC %4.4X   A %2.2X   B %2.2X   X %4.4X   SP %4.4X',[FCPU.PC,FCPU.A,FCPU.B,FCPU.X,FCPU.SP]));
+ FPanelSnapshotValid:=True;
+ FPanelRefreshOnce:=False;
+ Panel.Canvas.Draw(0,0,FPanelSnapshot);
 end;
 procedure TFrmMain.RAMFileMenuClick(Sender:TObject);
 var F:TFrmRAMFile;
@@ -433,14 +520,14 @@ begin
  F:=TFrmRAMFile.CreateForMemory(Self,PRAM64K(@FMem));
  try
   PlaceBesideMain(F,False);
-  F.ShowModal;
+  EnsurePanelOnScreen(F); F.ShowModal;
   { RAM file I/O uses its own address fields.  After a successful LOAD,
     show the loaded start address on the front panel for immediate verification/run. }
   if F.LastLoadStart >= 0 then
     FAddr := Word(F.LastLoadStart);
   FData:=FMem[FAddr];
   if Assigned(FRAMMonitor) then FRAMMonitor.ForceRefresh;
-  Panel.Invalidate;
+  RefreshPanelOnce;
  finally
   F.Free;
  end;
@@ -456,7 +543,7 @@ begin
   FRAMMonitor.Hide
  else begin
   FRAMMonitor.ForceRefresh;
-  FRAMMonitor.Show;
+  EnsurePanelOnScreen(FRAMMonitor); FRAMMonitor.Show;
   FRAMMonitor.BringToFront;
  end;
 end;
@@ -476,6 +563,17 @@ begin
  FPIAA.SetCA1Level(True);
 end;
 
+procedure TFrmMain.EnsurePanelOnScreen(F:TForm);
+var Work:TRect; X,Y:Integer;
+begin
+ Work:=F.Monitor.WorkareaRect;
+ X:=F.Left; Y:=F.Top;
+ if X+F.Width>Work.Right then X:=Work.Right-F.Width;
+ if Y+F.Height>Work.Bottom then Y:=Work.Bottom-F.Height;
+ if X<Work.Left then X:=Work.Left;
+ if Y<Work.Top then Y:=Work.Top;
+ F.SetBounds(X,Y,F.Width,F.Height);
+end;
 procedure TFrmMain.PlaceBesideMain(F:TForm;RightSide:Boolean);
 const Gap=8;
 var Other:TForm; I,Y:Integer; Work:TRect;
@@ -580,6 +678,7 @@ end;
 
 procedure TFrmMain.MainShow(Sender:TObject);
 begin
+ EnsurePanelOnScreen(Self);
  { OnShow runs before the native main window has finished appearing.
    Defer TV creation until that operation returns to the message loop. }
  if not FStartupTVPending then Exit;
@@ -610,7 +709,7 @@ begin
   PlaceBesideMain(FKeyboard,True);
  end;
  if FKeyboard.Visible then FKeyboard.Hide
- else begin FKeyboard.Show; FKeyboard.BringToFront end;
+ else begin EnsurePanelOnScreen(FKeyboard); FKeyboard.Show; FKeyboard.BringToFront end;
 end;
 
 procedure TFrmMain.ColorTVMenuClick(Sender:TObject);
@@ -619,10 +718,10 @@ begin
   FTV:=TFrmColorTV.CreateForMemory(Self,@FMem[0],@FTVControl,FVramBase);
   PlaceBesideMain(FTV,True);
  end;
- if not FTV.Visible then FTV.Show else begin FTV.BringToFront; FTV.SetFocus end;
+ if not FTV.Visible then begin EnsurePanelOnScreen(FTV); FTV.Show end else begin FTV.BringToFront; FTV.SetFocus end;
 end;
 procedure TFrmMain.PanelMouseDown(Sender:TObject;Button:TMouseButton;Shift:TShiftState;X,Y:Integer);var i,sx:Integer;begin
- if (Y>=472)and(Y<=529) then for i:=7 downto 0 do begin sx:=72+(7-i)*47;if(X>=sx)and(X<=sx+31)then begin FDataSw[i]:=not FDataSw[i];UpdateFromSwitches;Panel.Invalidate;Exit end end;
+ if (Y>=472)and(Y<=529) then for i:=7 downto 0 do begin sx:=72+(7-i)*47;if(X>=sx)and(X<=sx+31)then begin FDataSw[i]:=not FDataSw[i];UpdateFromSwitches;RefreshPanelOnce;Exit end end;
  if(X>=405)and(X<=438)and(Y>=238)and(Y<=294)then begin
   { ADDRESS SET: the front-panel entry byte is shifted into the 16-bit
     DMA address register.  Press once with the high byte on S7..S0,
@@ -631,11 +730,11 @@ procedure TFrmMain.PanelMouseDown(Sender:TObject;Button:TMouseButton;Shift:TShif
   FAddr:=Word(((Cardinal(FAddr)shl 8)or Cardinal(FData))and $FFFF);
   FData:=FMem[FAddr];
   FAddressPulse:=12; { about 120 ms: visible press, then spring return }
-  Panel.Invalidate;
+  RefreshPanelOnce;
   Exit
  end;
- if(X>=455)and(X<=488)and(Y>=238)and(Y<=294)then begin FHalt:=True;FRun:=False;Panel.Invalidate;Exit end;
- if(X>=505)and(X<=538)and(Y>=238)and(Y<=294)then begin if ssShift in Shift then DoReset else begin FCPU.PC:=FAddr;FHalt:=False;FRun:=True;Panel.Invalidate end;Exit end;
+ if(X>=455)and(X<=488)and(Y>=238)and(Y<=294)then begin FHalt:=True;FRun:=False;RefreshPanelOnce;Exit end;
+ if(X>=505)and(X<=538)and(Y>=238)and(Y<=294)then begin if ssShift in Shift then DoReset else begin FCPU.PC:=FAddr;FHalt:=False;FRun:=True;RefreshPanelOnce end;Exit end;
  if(X>=430)and(X<=463)and(Y>=365)and(Y<=421)then begin FReadPulse:=12;DMARead;Exit end;
  if(X>=486)and(X<=519)and(Y>=365)and(Y<=421)then begin FWritePulse:=12;DMAWrite;Exit end;
 end;

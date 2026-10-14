@@ -176,7 +176,7 @@ begin
     1: labelText:='GRAPHICS 64x64';
   else labelText:='GRAPHICS 128x64'; end;
   labelText:=labelText+'   VRAM '+VramRangeText;
-  C.TextOut(48,FScreen.Height-37,Format('Λ-1 COLOR TV   %s',[labelText]));
+  C.TextOut(48,FScreen.Height-37,Format('Ramda1 COLOR TV   %s',[labelText]));
 end;
 
 procedure TFrmColorTV.FormDeactivateHandler(Sender: TObject);

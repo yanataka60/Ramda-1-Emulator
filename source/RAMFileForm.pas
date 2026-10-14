@@ -3,7 +3,7 @@
 interface
 
 uses
-  Winapi.Windows, System.SysUtils, System.Classes,
+  EmulatorSettings, Winapi.Windows, System.SysUtils, System.Classes,
   Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.Dialogs, Vcl.Graphics;
 
 type
@@ -50,6 +50,12 @@ begin
   inherited Create(AOwner);
   FMemory := AMemory;
   FLastLoadStart := -1;
+  OpenDlg.InitialDir:=Ramda1Settings.BinLoadDirectory;
+  OpenDlg.FileName:=Ramda1Settings.BinLoadFile;
+  SaveDlg.InitialDir:=Ramda1Settings.BinSaveDirectory;
+  SaveDlg.FileName:=Ramda1Settings.BinSaveFile;
+  OpenDlg.Options:=OpenDlg.Options+[ofNoChangeDir];
+  SaveDlg.Options:=SaveDlg.Options+[ofNoChangeDir];
 end;
 
 function TFrmRAMFile.ParseHexEdit(E: TEdit; const What: string): Integer;
@@ -70,6 +76,8 @@ begin
   try
     StartAddr := ParseHexEdit(EdLoadAddr, 'LOAD開始アドレス');
     if not OpenDlg.Execute then Exit;
+    Ramda1Settings.RememberFile(Ramda1Settings.BinLoadFile,Ramda1Settings.BinLoadDirectory,OpenDlg.FileName);
+    OpenDlg.InitialDir:=Ramda1Settings.BinLoadDirectory;
     FS := TFileStream.Create(OpenDlg.FileName, fmOpenRead or fmShareDenyWrite);
     try
       if FS.Size > (65536 - StartAddr) then
@@ -102,6 +110,8 @@ begin
     if EndAddr < StartAddr then
       raise Exception.Create('SAVE終了アドレスは開始アドレス以上にしてください。');
     if not SaveDlg.Execute then Exit;
+    Ramda1Settings.RememberFile(Ramda1Settings.BinSaveFile,Ramda1Settings.BinSaveDirectory,SaveDlg.FileName);
+    SaveDlg.InitialDir:=Ramda1Settings.BinSaveDirectory;
     Count := EndAddr - StartAddr + 1;
     FS := TFileStream.Create(SaveDlg.FileName, fmCreate);
     try

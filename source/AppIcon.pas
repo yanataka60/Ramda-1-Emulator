@@ -10,7 +10,7 @@ uses
   System.Classes, Vcl.Forms, Vcl.Graphics;
 
 const
-  Lambda1IconData: array[0..28822] of Byte = (
+  Ramda1IconData: array[0..28822] of Byte = (
     $00,$00,$01,$00,$07,$00,$10,$10,$00,$00,$00,$00,$20,$00,$1F,$03,
     $00,$00,$76,$00,$00,$00,$18,$18,$00,$00,$00,$00,$20,$00,$87,$05,
     $00,$00,$95,$03,$00,$00,$20,$20,$00,$00,$00,$00,$20,$00,$6E,$07,
@@ -1823,7 +1823,7 @@ begin
   S := TMemoryStream.Create;
   I := TIcon.Create;
   try
-    S.WriteBuffer(Lambda1IconData[0], SizeOf(Lambda1IconData));
+    S.WriteBuffer(Ramda1IconData[0], SizeOf(Ramda1IconData));
     S.Position := 0;
     I.LoadFromStream(S);
     Application.Icon.Assign(I);
