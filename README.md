@@ -12,6 +12,8 @@
 ## 使い方
 　起動した状態でメインパネルが操作可能です。
 
+![Ramda-1](https://github.com/yanataka60/Ramda-1-Emulator/blob/main/PNG/MAIN%20PANEL.png)
+
 　DATA-SW、ADDRESS-SWを操作してアドレスを設定してからDATA-SW、WRITE-SW、READ-SWを操作してプログラムを入力します。
 
 　入力し終わったらもう一度DATA-SW、ADDRESS-SWでプログラム実行開始アドレスをセットしてGO-SWで実行です。
